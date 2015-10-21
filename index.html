@@ -1,0 +1,556 @@
+<html>
+<head>
+	<title>NP chunker preprocessor</title>
+	<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8">
+
+
+
+<!-- smoothness ui-lightness-->
+	<link rel="stylesheet" href="css/smoothness/jquery-ui-1.10.0.custom.min.css"/>
+	<link rel="stylesheet" href="css/style.css" type="text/css" />
+
+	<script src="js/jquery.min.js"></script>
+	<script src="js/jquery-ui-1.10.0.custom.min.js"></script>
+	<script src="js/helper.js"></script>
+	</head>
+	<body>
+
+
+<script type="text/javascript" src="js/jquery.qtip.min.js"></script>
+<script type="text/javascript" src="js/tooltip.js"></script>
+<script type="text/javascript" src="js/jqueue.js"></script>
+<script type="text/javascript" src="js/jquery.tablesorter.js"></script>
+
+<link rel="stylesheet" href="js/code/lib/codemirror.css">
+<script src="js/code/lib/codemirror.js"></script>
+<script src="js/code/mode/css/css.js"></script>
+<script src="js/code/addon/selection/active-line.js"></script>
+<link rel="stylesheet" href="js/code/addon/dialog/dialog.css">
+<script src="js/code/addon/dialog/dialog.js"></script>
+<script src="js/code/addon/search/search.js"></script>
+<script src="js/code/addon/search/searchcursor.js"></script>
+
+
+<link rel="stylesheet" href="css/blue/style.css" type="text/css" />
+
+
+<script>
+
+    var trainSet, testSet, rules;
+    var first = true;
+
+    var progressValue = 0;
+    var currSentenceId = 0, wnFilled = 0;
+    var grammarEditor,iobEditor,macroEditor;
+    var patterns = [], catPatterns = {}, patternsExample = {}, wnPatterns = {}, selectedWN = [];
+
+
+
+    $(function(){
+
+        $( "#pattabs" ).tabs();
+        $( "#ruletabs" ).tabs({
+            activate: function( event, ui ) {
+                if (ui.newPanel.attr('id') == 'rtabs-2') {
+                    macroEditor.refresh();
+                }
+                if (ui.newPanel.attr('id') == 'rtabs-3') {
+                    iobEditor.refresh();
+                }
+            }
+            });
+        $( "#start" )
+            .button()
+            .click(function( event ) {
+                event.preventDefault();
+                $(this).button( "disable" );
+                startProgress();
+			});
+
+        $('#applyMacroId').button().click(function( event ) {
+			event.preventDefault();
+			analyseTrainingSet(0);
+        });
+
+        $('#exportId').button().click(function( event ) {
+            event.preventDefault();
+			fillSelectedWN();
+			convertMacro(testSet);
+			refreshExportPreview();
+			$('#exportDlg').dialog('open');
+		});
+
+        grammarEditor = CodeMirror.fromTextArea(document.getElementById("rules"), {
+            mode: "text/x-scss",
+            styleActiveLine: false,
+            lineNumbers: true,
+            lineWrapping: true
+          });
+        macroEditor = CodeMirror.fromTextArea(document.getElementById("macros"), {
+            mode: "text/x-scss",
+            styleActiveLine: false,
+            lineNumbers: true,
+            lineWrapping: true
+          });
+        iobEditor = CodeMirror.fromTextArea(document.getElementById("iobRules"), {
+            mode: "text/x-scss",
+            styleActiveLine: false,
+            lineNumbers: true,
+            lineWrapping: true,
+            readOnly: true
+          });
+
+
+        $( "#wordDetailsDlg" ).dialog({
+            autoOpen: false,
+            minWidth: 700,
+            buttons: {
+                "OK": function() {
+                  $( this ).dialog( "close" );
+                }
+            }
+            });
+	$('#catMinID').spinner({
+	    min: 0,
+	    step: 50,
+	    stop: function( e, ui ) {
+		showCategoryTable('catTable', catPatterns, getLastFilter('catTable'), $('#catMinID').spinner('value'), $('#catMinpercentID').spinner('value'));
+	    }
+	  });
+	$('#catMinpercentID').spinner({
+	    min: 0,
+	    max: 100,
+	    step: 1,
+	    stop: function( e, ui ) {
+		showCategoryTable('catTable', catPatterns, getLastFilter('catTable'), $('#catMinID').spinner('value'), $('#catMinpercentID').spinner('value'));
+	    }
+	  });
+
+	$('#wnMinID').spinner({
+	    min: 0,
+	    step: 50,
+	    stop: function( e, ui ) {
+		showCategoryTable('wnTable', wnPatterns, getLastFilter('wnTable'), $('#wnMinID').spinner('value'), $('#wnMinpercentID').spinner('value'));
+	    }
+	  });
+	$('#wnMinpercentID').spinner({
+	    min: 0,
+	    max: 100,
+	    step: 1,
+	    suffix:'%',
+	    stop: function( e, ui ) {
+		showCategoryTable('wnTable', wnPatterns, getLastFilter('wnTable'), $('#wnMinID').spinner('value'), $('#wnMinpercentID').spinner('value'));
+	    }
+	  });
+	$('.ui-spinner-button').click(function() {
+	    $(this).siblings('input').change();
+	 });
+
+	$( "#processDlg" ).dialog({
+            autoOpen: false,
+            minWidth: 400,
+	    title: 'Analysing training set...',
+	    dialogClass: "no-close",
+            buttons: {
+            }
+            });
+	$('#processProgressbar').progressbar({});
+
+
+        $( "#macroDlg" ).dialog({
+            autoOpen: false,
+            minWidth: 400,
+            modal:true,
+            buttons: {
+                "Add": function() {
+                  addMacro($('#newMacroId').val());
+                  $( this ).dialog( "close" );
+                },
+                Cancel: function() {
+                  $( this ).dialog( "close" );
+                }
+            }
+            });
+
+	$('#exportDlg').dialog({
+            autoOpen: false,
+            minWidth: 400,
+            modal:true,
+	    title: 'Export',
+            buttons: {
+                "Export": function() {
+                  //addMacro($('#newMacroId').val());
+
+		    var o = $("#exportOriginal").attr('checked') == 'checked';
+		    var wn = $("#exportWN").attr('checked') == 'checked';
+
+
+		  if ($("#exportTrain").attr('checked') == 'checked') {
+		    exportSet('train_wow.txt', trainSet, o, wn);
+		  }else
+		    exportSet('test_wow.txt', testSet, o, wn);
+
+                  $( this ).dialog( "close" );
+                },
+                Cancel: function() {
+                  $( this ).dialog( "close" );
+                }
+            }});
+
+        var progressLabel = $( ".progress-label" );
+        var trProgressLabel = $( ".trProgress-label" );
+        $('#testProgressbar').progressbar({
+            value: false,
+            change: function() {
+                progressLabel.text( $('#testProgressbar').progressbar( "value" ) + "%" );
+            }
+            /*complete: function() {
+                progressLabel.text( "Complete!" );
+            }*/
+        });
+        $('#trainProgressbar').progressbar({
+            value: false,
+            change: function() {
+                trProgressLabel.text( $('#trainProgressbar').progressbar( "value" ) + "%" );
+            }
+        });
+		
+		
+		trainSet = t1.concat(t2, t3, t4, t5, t6, t7, t8);
+		
+		analyseTrainingSet(0);
+    });
+
+	document.write('\x3Cscript type="text/javascript" src="dataset/conll2000_train.1.json">\x3C/script>');
+	document.write('\x3Cscript type="text/javascript" src="dataset/conll2000_train.2.json">\x3C/script>');
+	document.write('\x3Cscript type="text/javascript" src="dataset/conll2000_train.3.json">\x3C/script>');
+	document.write('\x3Cscript type="text/javascript" src="dataset/conll2000_train.4.json">\x3C/script>');
+													  
+	document.write('\x3Cscript type="text/javascript" src="dataset/conll2000_train.5.json">\x3C/script>');
+	document.write('\x3Cscript type="text/javascript" src="dataset/conll2000_train.6.json">\x3C/script>');
+	document.write('\x3Cscript type="text/javascript" src="dataset/conll2000_train.7.json">\x3C/script>');
+	document.write('\x3Cscript type="text/javascript" src="dataset/conll2000_train.8.json">\x3C/script>');
+	
+	document.write('\x3Cscript type="text/javascript" src="dataset/conll2000_test.json">\x3C/script>');
+</script>
+
+<style>
+    .gold{
+        color: green;
+    }
+    .test{
+        color: red;
+    }
+    .row{
+        font-style:italic;
+        color:grey;
+    }
+    .middleRow{
+        color:blue;
+        min-width:40px;
+    }
+    .notification{
+        width:110px;
+        height:16px;
+    }
+    .results{
+        position: fixed;
+        right:40px;
+        z-index: 10;
+        background-color: lightgrey;
+    }
+    .ui-effects-transfer { border: 2px dotted gray; }
+    .theader{
+        font-weight:bold;
+    }
+    .ui-progressbar {
+        position: relative;
+    }
+    .progress-label, .trProgress-label{
+        position: absolute;
+        left: 40%;
+        top: 6px;
+    }
+    div.inline { float:left; }
+</style>
+
+<div id="pattabs">
+    <ul>
+        <li><a href="#tabs-1">overview of NP patterns</a></li>
+        <li><a href="#tabs-2">rule tester</a></li>
+        <li><a href="#tabs-3">categories</a></li>
+	<li><a href="#tabs-4">wordnet suggestions</a></li>
+    </ul>
+    <div id="tabs-1">
+        <div id="testpad2" style="height:50%; overflow: scroll"></div>
+    </div>
+    <div id="tabs-2">
+        <div id="testpad"></div>
+        <div id="macroDlg" title="add macro">
+            <input type="text" name="newMacroId" id="newMacroId" size="40">
+        </div>
+    </div>
+    <div id="tabs-3">
+        <div id="cattableid"></div>
+	<div>
+	    category: <input type="text" size="8" onkeyup="filterCat(this, 'catTable')"/>
+	    min freq.: <input type="text" value="0" size="8" id="catMinID"/>
+	    min rate: <input type="text" value="80" size="2" id="catMinpercentID"/>
+	</div>
+        <div id="catTable" style="height:400px; overflow: scroll"></div>
+        <div id="wordDetailsDlg" title="Category details">
+            <div id="wordDetailsContent" style="height:400px; overflow: scroll"></div>
+        </div>
+    </div>
+    <div id="tabs-4">
+	<div>
+	    synset: <input type="text" size="8" onkeyup="filterCat(this, 'wnTable')"/>
+	    min freq.: <input type="text" value="50" size="8" id="wnMinID"/>
+	    min rate: <input type="text" value="90" size="2" id="wnMinpercentID"/>
+	</div>
+
+
+	<div id="wnTable" style="height:400px; float:left; overflow: scroll"></div>
+	<div style="float:left; padding-left:50px">
+	    Selected WordNet synsets:
+	    <span class="ui-button" title="These WordNet synsets will be in output dataset. Others do not."><span class="ui-icon ui-icon-info"></span></span>
+	    <br/>
+	    <textarea id="selectedWNTable" cols="20" rows="20"></textarea>
+	</div>
+	<br style="clear:both;" />
+
+    </div>
+</div>
+
+
+
+<br/><br/>
+<div>
+    <div class="inline" style="width:680px">
+            <div id="ruletabs">
+                <ul>
+                    <li><a href="#rtabs-1">grammar</a></li>
+                    <li><a href="#rtabs-2">macros</a></li>
+                    <li><a href="#rtabs-3">one token features</a></li>
+                </ul>
+                <div id="rtabs-1">
+
+                    <textarea id="rules" cols="120" rows="5">NP:
+  <(DT|A|THE)>( <JJ>)* <NN>
+    <THE> <NN>
+ <NN> <NNS>
+</textarea>
+                </div>
+                <div id="rtabs-2">
+                    <textarea id="macros" cols="120" rows="5">MISTER:category="NNP" surface="Mr."
+THE: category="DT" surface="the"
+A: category="DT" surface="a"
+AN: category="DT" surface="an"
+THIS: category="DT" surface="This"
+THAT: category="DT" surface="That"
+OF: category="IN" surface="of"
+IN: category="IN" surface="in"
+FOR: category="IN" surface="for"
+WITH: category="IN" surface="with"
+OVER: category="IN" surface="over"
+HE: category="PRP" surface="he"
+PERCENT: category="NN" surface="%"
+COMPANY: category="NN" surface="company"
+WEEK: category="NN" surface="week"
+YESTERDAY: category="NN" surface="yesterday"
+MONTH: category="NN" surface="month"
+INDUSTRY: category="NN" surface="industry"
+PERIOD: category="NN" surface="period"
+THAT: category="IN" surface="that"
+OF: category="IN" surface="of"
+ABOUT: category="IN" surface="about"
+THAN: category="IN" surface="than"
+AS: category="IN" surface="as"
+AT: category="IN" surface="at"
+AROUND: category="IN" surface="around"
+MANY: category="JJ" surface="many"
+PERSONAL: category="JJ" surface="personal"
+TOTAL: category="JJ" surface="total"
+COMPANY: category="NN" surface="company"
+YESTERDAY: category="NN" surface="yesterday"
+WEEK: category="NN" surface="week"
+REVENUE: category="NN" surface="Revenue"
+PART: category="NN" surface="part"
+PRESIDENT: category="NN" surface="president"
+CHAIRMAN: category="NN" surface="chairman"
+ABOUT: category="IN" surface="about"
+THAT: category="IN" surface="that"
+THAN: category="IN" surface="than"
+AS: category="IN" surface="as"
+AT: category="IN" surface="at"
+OF: category="IN" surface="of"
+AROUND: category="IN" surface="around"
+UP: category="IN" surface="up"
+BETWEEN: category="IN" surface="between"
+OVER: category="IN" surface="over"
+THAT: category="IN" surface="that"
+IN: category="IN" surface="in"
+OVER: category="IN" surface="over"
+ABOVE: category="IN" surface="above"
+NEAR: category="IN" surface="near"
+AFTER: category="IN" surface="After"
+FROM: category="IN" surface="from"
+LIKE: category="IN" surface="like"
+UNIVERSITY: category="NNP" surface="University"
+LONDON: category="NNP" surface="London"
+ANY: category="DT" surface="any"
+SOME: category="DT" surface="some"
+ALL: category="DT" surface="all"
+NO: category="DT" surface="no"
+THESE: category="DT" surface="These"
+THOSE: category="DT" surface="those"
+EVERY: category="DT" surface="every"
+NEITHER: category="DT" surface="neither"
+EACH: category="DT" surface="each"
+EVERY: category="DT" surface="every"
+LAST: category="JJ" surface="last"
+FIRST: category="JJ" surface="first"
+MANY: category="JJ" surface="many"
+SUCH: category="JJ" surface="such"
+OTHER: category="JJ" surface="other"
+SUCH: category="JJ" surface="such"
+PAST: category="JJ" surface="past"
+NEXT: category="JJ" surface="next"
+MUCH: category="JJ" surface="much"
+TOTAL: category="JJ" surface="total"
+TOP: category="JJ" surface="top"
+AND: category="CC" surface="and"
+BUT: category="CC" surface="But"
+OR: category="CC" surface="or"
+AMPERSAND: category="CC" surface="&"
+PLUS: category="CC" surface="plus"
+EITHER: category="CC" surface="Either"
+NEITHER: category="CC" surface="Neither"
+MINUS: category="CC" surface="minus"
+PROPOSED: category="VBN" surface="proposed"
+ESTIMATED: category="VBN" surface="estimated"
+INCREASED: category="VBN" surface="increased"
+TIMES: category="VBZ" surface="times"
+CALLS: category="VBZ" surface="calls"
+IT: category="PRP" surface="it"
+HE: category="PRP" surface="he"
+THEY: category="PRP" surface="they"
+I: category="PRP" surface="I"
+WE: category="PRP" surface="we"
+YOU: category="PRP" surface="You"
+THEM: category="PRP" surface="them"
+SHE: category="PRP" surface="she"
+HIM: category="PRP" surface="him"
+ME: category="PRP" surface="me"
+THEMSELVES: category="PRP" surface="themselves"
+ITSELF: category="PRP" surface="itself"
+HER: category="PRP" surface="her"
+MYSELF: category="PRP" surface="myself"
+HERSELF: category="PRP" surface="herself"
+THEIRS: category="PRP" surface="theirs"
+OPERATING: category="VBG" surface="operating"
+CONTINUING: category="VBG" surface="continuing"
+TAX: category="VBP" surface="tax"
+CONCERN: category="VBP" surface="concern"
+COURT: category="VBP" surface="court"
+CAN: category="MD" surface="can"
+WHICH: category="WDT" surface="which"
+WHATEVER: category="WDT" surface="whatever"
+MORE: category="JJR" surface="more"
+LESS: category="JJR" surface="less"
+WHO: category="WP" surface="who"
+WHAT: category="WP" surface="what"
+WHOM: category="WP" surface="whom"
+HOW: category="WRB" surface="how"
+HALF: category="PDT" surface="half"
+PDT_ALL: category="PDT" surface="all"
+ETC: category="FW" surface="etc"
+WHOSE: category="WP$" surface="whose"
+WELL: category="UH" surface="Well"
+
+</textarea>
+
+                </div>
+                <div id="rtabs-3">
+		    <span class="ui-button" title="These features are always assigned to the same IOB label. Best features: they do not need any context."><span class="ui-icon ui-icon-info"></span></span>
+                    <input type="checkbox" id="r" checked="checked">use one token features (unambiguous assignments)
+                    <textarea id="iobRules" cols="120" rows="5"></textarea>
+                </div>
+            </div>
+
+      
+    </div>
+
+
+
+    <div class="inline">
+            <fieldset>
+                <legend>training set</legend>
+                <div id="trainResult"></div>
+                <div id="trainProgressbar"><div class="trProgress-label">...</div></div>
+            </fieldset>
+            <fieldset style="display:none">
+                <legend>test set</legend>
+                <div id="testResult"></div>
+                <div id="testProgressbar"><div class="progress-label">...</div></div>
+            </fieldset>
+
+    </div>
+	
+	<div class="inline">
+            <button id="start">eval</button>
+			<button id="applyMacroId">apply</button>
+			<button id="exportId">export</button>
+		<a href="demoVideo.htm" target="_blank">help</a>
+    </div>
+
+</div>
+
+
+<div id="processDlg">
+    <div id="processDetails"></div>
+    <div id="processProgressbar"></div>
+</div>
+
+<div id="exportDlg">
+    <input type="radio" id="exportTrain" name="set" value="train" checked="checked" onclick="refreshExportPreview()"/><label for="exportTrain"> training set</label> <br/>
+    <input type="radio" id="exportTest" name="set" value="test" onclick="refreshExportPreview()"/> <label for="exportTest"> test set</label> <br/>
+    <input type="checkbox" id="exportOriginal" onclick="refreshExportPreview()"/><label for="exportOriginal">original</label>
+    <input type="checkbox" id="exportWN" onclick="refreshExportPreview()"/><label for="exportWN">merge WordNet into POS column</label>
+    <textarea readonly id="exportPreview" cols="40" rows="10"></textarea>
+</div>
+<br/>
+
+<!-- 
+week.n.01
+level.n.07
+there.r.03
+number.n.10
+billion.s.02
+mister.n.01
+some.s.03
+school_term.n.01
+quarter.n.05
+both.s.01
+lineman.n.04
+today.n.02
+machine.n.03
+neighborhood.n.02
+street.n.01
+hour.n.01
+period.n.04
+nation.n.04
+division.n.10
+just.r.04
+end.n.07
+both.s.01
+million.s.01
+first.a.06
+there.n.01
+month.n.02
+period.n.07
+country.n.04
+
+-->
+</body>
+</html>
