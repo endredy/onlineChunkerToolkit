@@ -14,6 +14,7 @@ The development of features can be controlled in a user friendly way. The tool c
 If you use the tool, please cite the following paper:
 Istvan Endredy, 2015, Improving chunker performance using a web-based semi-automatic training data analysis tool, Poznan
 
+```
 @inproceedings{endrule,
   author = {Endr\'edy, Istv\'an},
   booktitle = {7th Language \& Technology Conference: Human Language Technologies as a Challenge for Computer Science and Linguistics},
@@ -24,6 +25,7 @@ Istvan Endredy, 2015, Improving chunker performance using a web-based semi-autom
   page = {80--84},
   year = 2015
 }
+```
 
 
 CoNLL2000 corpus: 
