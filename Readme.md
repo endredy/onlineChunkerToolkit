@@ -12,6 +12,7 @@ The development of features can be controlled in a user friendly way. The tool c
 ## references:
 
 If you use the tool, please cite the following paper:
+
 Istvan Endredy, 2015, Improving chunker performance using a web-based semi-automatic training data analysis tool, Poznan
 
 ```
