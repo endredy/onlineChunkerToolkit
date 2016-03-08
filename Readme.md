@@ -17,7 +17,7 @@ Istvan Endredy, 2015, Improving chunker performance using a web-based semi-autom
 
 ```
 @inproceedings{endrule,
-  author = {Endr\'edy, Istv\'an},
+  author = {Endr{\'e}dy, Istv{\'a}n},
   booktitle = {7th Language \& Technology Conference: Human Language Technologies as a Challenge for Computer Science and Linguistics},
   editor = {Zygmunt Vetulani; Joseph Mariani},
   isbn = {978-83-932640-8-7},
