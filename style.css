@@ -1,0 +1,95 @@
+
+.no-close .ui-dialog-titlebar-close {
+  display: none;
+}
+
+
+.colLabel{
+    width: 55px;
+}
+
+.colSum, .colPer {
+    width: 45px;
+}
+
+
+.wn { list-style-type: none; margin: 0; padding: 0; width: 60%; }
+.wn li { margin: 0 3px 3px 3px; padding: 0.4em; padding-left: 1.5em; font-size: 1.4em; height: 18px; }
+.wn li span { position: absolute; margin-left: -1.3em; }
+/*.ui-autocomplete-loading {
+    background: white url('../images/ui-anim_basic_16x16.gif') right center no-repeat;
+}
+*/
+
+* {
+ /* -webkit-font-smoothing: antialiased;
+  color: #333;
+  font: 11px/12.5px "Helvetica Neue", HelveticaNeue, Helvetica, Arial, sans-serif;*/
+ font-size: 13px !important;
+}
+/*
+.ui-state-default {
+    font-size: 0.8em;
+}
+
+.ui-widget {
+    font-size: 0.8em;
+}*/
+
+.tooltip td {
+    padding-left: 2px;
+    padding-right: 2px;
+    border: 1px solid #FFFFFF;
+    border-collapse: collapse;
+}
+
+.tooltip .good {
+    color:green;
+}
+
+.tooltip .bad {
+    color:red;
+}
+
+.tooltip {
+border-collapse: collapse;
+}
+
+
+.jtable, .jtableSmall{
+    border-collapse: collapse;
+/*    border-right: 1px solid #E3F1FE;
+    border-top: 1px solid #E3F1FE;
+    margin: auto;
+*/  width: 95%;
+}
+
+.jtableSmall {
+    width: 530px;
+}
+.jtable .center{
+  text-align: center;
+}
+
+.ui-state-hover{
+   font-weight:normal;
+   background: #FCF2C7 !important;
+}
+
+.orderCaption {
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+  text-align: center;
+}
+span.ui-icon {
+    float: left;
+    margin: 0px;
+}
+
+/*
+.ui-state-highlight { height: 1.5em; line-height: 1.2em; }
+*/
+.highlight {
+    font-weight: bold;
+}
