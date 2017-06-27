@@ -1,4 +1,4 @@
-
+var EXAMPLE_LIMIT = 30;
 
 function analyseTrainingSet(step) {
 
@@ -9,31 +9,31 @@ function analyseTrainingSet(step) {
 	detailsText = 'Converting macros...';
     }else if (step == 1) {
 
-	var start = +new Date();
+	var start = new Date();
 	convertMacro(trainSet);
-	var end = +new Date();
+	var end = new Date();
 	console.log("convertMacro in " + (end-start) + " milliseconds");
 	detailsText = ' (' + (end-start) + ' ms)<br/>';
 	detailsText += 'Search for one token features...';
-	p = 33;
+	p = 20;
     }else if (step == 2) {
 
-	start = +new Date();
-	commonPatterns(trainSet);
-	end = +new Date();
+	start = new Date();
+	patterns = commonPatterns(trainSet);
+	end = new Date();
 	console.log("commonPatterns in " + (end-start) + " milliseconds");
 	detailsText = ' (' + (end-start) + ' ms)<br/>';
 	detailsText += 'Search for common patterns...';
-	p = 66;
+	p = 40;
     }else if (step == 3) {
 
-	start = +new Date();
+	start = new Date();
 	collectPattern(trainSet, 0);
 	return;
-	/*end = +new Date();
-	console.log("collectPattern in " + (end-start) + " milliseconds");
-	detailsText = ' (' + (end-start) + ' ms)<br/>';
-	*/
+	//end = new Date();
+	//console.log("collectPattern in " + (end-start) + " milliseconds");
+	//detailsText = ' (' + (end-start) + ' ms)<br/>';
+	
     }else if (step == 4) {
 
 		setTimeout(function(){
@@ -47,7 +47,7 @@ function analyseTrainingSet(step) {
     if (!finished){
 
         $('#processDetails').html($('#processDetails').html() + detailsText);
-        $( "#processProgressbar" ).progressbar({value: p})
+        $( "#processProgressbar" ).progressbar("value", p);
 		setTimeout(function(){analyseTrainingSet(step+1);}, 50);
     }
 }
@@ -615,62 +615,73 @@ function collectPattern(s, start){
 			addCategoryPattern(catPatterns, s[i][w].mcategory, s[i][w]);
 			//wordnet => iob: it is enough for once
 			if (!wnFilled) {
-			var wnKeys = s[i][w].other == "" ? [] : s[i][w].other.split("/");
-			for (var k=0; k<wnKeys.length; k++) {
-				addCategoryPattern(wnPatterns, wnKeys[k], s[i][w]);
+				var wnKeys = s[i][w].other == "" ? [] : s[i][w].other.split("/");
+				for (var k=0; k<wnKeys.length; k++) {
+					addCategoryPattern(wnPatterns, wnKeys[k], s[i][w]);
+				}
 			}
-			}
-
 			r_sentence.push({"iob":s[i][w].iob});
 		}
 
 		for(var n=0; n<patterns.length; n++){
 			var k = sentence.indexOf(patterns[n].pattern);
 			if (k != -1) {
-			var p1 = getPosition(k, pos);
-			var p2 = getPosition(k+patterns[n].pattern.length-2, pos); //
+				var p1 = getPosition(k, pos);
+				var p2 = getPosition(k+patterns[n].pattern.length-2, pos); //
 
-			//example
-			addPatternExamples(patterns[n].pattern, i);
-			//HUN
-			//var itIsNp = r_sentence[p1].iob == 'B' && r_sentence[p2].iob == 'E' ||
-			//    r_sentence[p1].iob == '1-N_1' && r_sentence[p2].iob == '1-N_1';
+				//example
+				addPatternExamples(patterns[n].pattern, i);
+				
+				
+				if (typeof patterns[n].ex != 'undefined' && patterns[n].ex.length == EXAMPLE_LIMIT)
+					continue; //speed up (good, bad, etc values not necessary for every single example
+				//HUN
+				//var itIsNp = r_sentence[p1].iob == 'B' && r_sentence[p2].iob == 'E' ||
+				//    r_sentence[p1].iob == '1-N_1' && r_sentence[p2].iob == '1-N_1';
 
-			//ENG
-			var nn=1, itIsNp = r_sentence[p1].iob == 'B-NP';
-			while (nn<=p2 && p1+nn<r_sentence.length && r_sentence[p1+nn].iob == 'I-NP') {
-				nn++;
-			}
-			if (nn < p2-p1+1) itIsNp = false;
+				//ENG
+				var nn=1, itIsNp = r_sentence[p1].iob == 'B-NP';
+				while (nn<=p2 && p1+nn<r_sentence.length && r_sentence[p1+nn].iob == 'I-NP') {
+					nn++;
+				}
+				if (nn < p2-p1+1) itIsNp = false;
 
-			if (itIsNp)
-				patterns[n].good++;
-			else
-				patterns[n].bad++;
-			if (typeof patterns[n].ex == 'undefined') patterns[n].ex = [];
-			var surf = [], iobseq = [], offset=!itIsNp && nn > p2-p1+1 ? 1 : 0;
+				if (typeof patterns[n].ex == 'undefined') {
+					patterns[n].ex = [];
+					patterns[n].goodExampleCounter = 0;
+				}
+				if (itIsNp){
+					patterns[n].good++;
+				}else
+					patterns[n].bad++;
 
-			for(var f=p1; f<=p2; f++){ //  + offset
-				surf.push(s[i][f].word);
-				iobseq.push(r_sentence[f].iob);
-			}
+				var surf = [], iobseq = [], offset=!itIsNp && nn > p2-p1+1 ? 1 : 0;
 
-			if (patterns[n].ex.length < 200)
-				patterns[n].ex.push({
-					words: surf,
-					categories: decodeTags(sentence.substr(k, k+patterns[n].pattern.length-1)).split(" "),
-					iob: iobseq,
-					sentence_id: s[i][0].sid});
+				for(var f=p1; f<=p2; f++){ //  + offset
+					surf.push(s[i][f].word);
+					iobseq.push(r_sentence[f].iob);
+				}
+
+				if ((patterns[n].ex.length < EXAMPLE_LIMIT && !itIsNp) || patterns[n].goodExampleCounter < EXAMPLE_LIMIT/2){
+					patterns[n].ex.push({
+						words: surf,
+						good: itIsNp,
+						categories: decodeTags(sentence.substr(k, patterns[n].pattern.length-1)).split(" "),
+						iob: iobseq,
+						sentence_id: s[i][0].sid});
+					if (itIsNp)
+						patterns[n].goodExampleCounter++;
+				}
 			}
 		}
 		
 		if (i>0 && i % 200 == 0) {
-			setTimeout(function(){collectPattern(s, i+1);}, 50);
-			$( "#processProgressbar" ).progressbar({value: 66+(33.3*i/s.length)});
+			setTimeout(function(){collectPattern(s, i+1);}, 50); //let the UI to work a little bit
+			$( "#processProgressbar" ).progressbar("value", 40+(40*i/s.length));
 			return;
 		}
+		
     }
-
     /*
     {
             "words": [
@@ -688,10 +699,20 @@ function collectPattern(s, start){
             "sentence_id": "17376"
         }
     */
+	resetTooltip();
+	collectExamplesForPattern(0);
+}
+
+function collectExamplesForPattern(start){
     //show patterns
-    for(var n=0; n<patterns.length; n++){
-		var data = {unique: (patterns[n].bad == 0), np: (patterns[n].bad == 0), rows: patterns[n].ex};
+    for(var n=start; n<patterns.length; n++){
+		var data = {unique: (patterns[n].bad == 0), np: (patterns[n].good > 0), rows: patterns[n].ex};
 		addExampleInfo("#status"+n, data, patterns[n].pattern, patterns[n].exampleId);
+		if (n % 200 == 0) {
+			setTimeout(function(){collectExamplesForPattern(n+1);}, 50); //let the UI to work a little bit
+			$( "#processProgressbar" ).progressbar("value", 80+(20*n/patterns.length));
+			return;
+		}
     }
 
     var l = $('#catMinID').spinner('value');
@@ -700,12 +721,13 @@ function collectPattern(s, start){
     showCategoryTable('catTable', catPatterns, getLastFilter('catTable'), l, l2);
     //bestPatterns(wnPatterns, 0.8);
 
+	
     l = $('#wnMinID').spinner('value');
     l2 = $('#wnMinpercentID').spinner('value');
     showCategoryTable('wnTable', wnPatterns, getLastFilter('wnTable'), l, l2);
     bestIOBPatterns();
 	
-	//finish
+	//finish process
 	analyseTrainingSet(4);
 }
 
@@ -744,31 +766,32 @@ function bestIOBPatterns(){
     var o = "";
     for(var item in catPatterns){
 
-	var c = catPatterns[item];
-	if (c.length == 1) {
-	    //B-NP: DT // 17807
-	    o += c[0].label + ": " + item + " // " +c[0].counter + "\n";
-	}
+		var c = catPatterns[item];
+		if (c.length == 1) {
+			//B-NP: DT // 17807
+			o += c[0].label + ": " + item + " // " +c[0].counter + "\n";
+		}
     }
-
     iobEditor.setValue(o);
 }
 
 function addExampleInfo(objId, data, se, exampleId){
-	$(objId).append("<img src='images/"+(data.unique ? "status_ok.png": "status_x.png")+"'/>");
+	var id = objId.replace('#', '');
+	var html = "<img src='images/"+(data.unique ? "status_ok.png": "status_x.png")+"'/>";
 
 
-	var tooltipID = "tooltipID"+objId.replace('#', '');
-	var cellID = "cell"+objId.replace('#', '');
-	var html = '<span id="'+tooltipID+'">';
-        html += ' <div class="ui-button"><span class="ui-icon ui-icon-info"></span></div></span>';
+	var tooltipID = "tooltipID"+id;
+	var cellID = "cell"+id;
+	html += '<span id="'+tooltipID+'">';
+    html += ' <div class="ui-button"><span class="ui-icon ui-icon-info"></span></div></span>';
 
 	html += ' <span class="ui-button" onclick="addPattern(\''+se+'\', \''+cellID+'\', true)" title="add pattern to grammar"><span class="ui-icon ui-icon-circle-plus"></span></span>';
 	html += ' <span class="ui-button" onclick="addToTester('+exampleId+')" title="add pattern to rule tester (sid:'+trainSet[exampleId][0].sid+')"><span class="ui-icon ui-icon-arrowthickstop-1-e"></span></span>';
 
 	html += ' <span class="ui-button" onclick="showAllPatternExamples(\''+se+'\')" title="show pattern"><span class="ui-icon ui-icon-comment"></span></span>';
 
-	$(objId).append(html);
+	//$(objId).append(html);
+	document.getElementById(id).innerHTML += html;
 
 	if (data.unique && data.np) addPattern(se, '', false);
 	addTooltip({id: tooltipID, parameters:data});
@@ -808,11 +831,9 @@ function addPattern(s, cellID, calc){
     appendTo(grammarEditor, "    "+s+"\n");
 
     if (calc){
-
-	$( "#"+cellID ).effect( "transfer", { to: ".CodeMirror", className: "ui-effects-transfer" }, 900 ); //rules
-	setTimeout(fullTest, 900);
-
-	//fullTest();
+		$( "#"+cellID ).effect( "transfer", { to: ".CodeMirror", className: "ui-effects-transfer" }, 900 ); //rules
+		setTimeout(fullTest, 900);
+		//fullTest();
     }
 }
 
@@ -996,6 +1017,9 @@ function escapeRegExp(string){
         return str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
+	/**
+	count the histograms of each noun phrase sequences in dataset "s" (NP of training set)
+	*/
     function commonPatterns(s){
 
         var hist = {}
@@ -1007,34 +1031,29 @@ function escapeRegExp(string){
                 var npPattern = "";
                 for(var n=goldNP[w].start; n<=goldNP[w].end; n++){
                     npPattern += "<" + s[i][n].mcategory + "> ";
-
-	   // if (s[i][n].category == 'Pd3-sn' && s[i][n].stem == 'ez') {
-	//	var tttt = 0;
-	//   }
-
                 }
-
-                //npPattern = s[i][0].id + " " + npPattern;
-                hist[npPattern] ? hist[npPattern].counter+=1 : hist[npPattern]={counter:1, exampleId:i};
+                hist[npPattern] ? hist[npPattern].counter++ : hist[npPattern]={counter:1, exampleId:i};
             }
         }
         var h = []
         for(var e in hist)
             h.push({pattern:e, value:hist[e].counter, exampleId:hist[e].exampleId, good:0, bad:0});
-        h.sort(function(a,b) {
-            return b.value - a.value;
-        });
-	patterns = h;
+			h.sort(function(a,b) {
+				return b.value - a.value;
+			});
+	//patterns = h;
         var html = "<table>";
         for(var i=0; i<h.length;i++){
-            html += "<tr><td>"+h[i].value+"</td><td><div id='status"+i+"' class='notification'></div></td><td id='cellstatus"+i+"'>"+decodeTags(h[i].pattern)+"</td></tr>"; //
+            html += "<tr><td>"+h[i].value+"</td><td><div id='status"+i+"' class='notification'></div></td><td id='cellstatus"+i+"'>"+decodeTags(h[i].pattern)+"</td></tr>";
         }
         html += "</table>";
-        $('#testpad2').html(html);
+        //$('#testpad2').html(html);
+		document.getElementById('testpad2').innerHTML = html;//speed up
 
 //        for(var i=0; i<h.length;i++){
 //            checkNP("#status"+i, h[i].pattern, h[i].exampleId);
 //        }
+		return h;
     }
 
     function setProgressValue(v) {
@@ -1274,7 +1293,7 @@ function escapeRegExp(string){
     }
 
     function appendTo(editor, text) {
-	editor.replaceRange(text, CodeMirror.Pos(editor.lastLine()));
+		editor.replaceRange(text, CodeMirror.Pos(editor.lastLine()));
     }
 
     function fillIobRules(r){

@@ -15,16 +15,11 @@ function getContent(id){
 	return 0;
 }
 
+function resetTooltip(){
+	details = []; //clean the tooltip data
+}
+
 function addTooltip(x) {
-
-	//clean the same object
-	for(var i=0; i<details.length; i++){
-		if (details[i].id == x.id){
-			details.splice(i, 1);
-			break;
-		}
-	}
-
 	details.push(x);
 	initTooltip('#' + x.id);
 }
@@ -47,7 +42,7 @@ function createBubble(c){
 		cat += c.rows[i].categories[j] + " ";
 		iob += c.rows[i].iob[j] + " ";
 	    }
-	    html += '<tr class="odd"><td>'+c.rows[i].sentence_id+'</td><td>'+surf+'</td><td>'+cat+'</td><td>'+iob+'</td></tr>';
+	    html += '<tr class="'+(c.rows[i].good?'good':'bad')+'"><td>'+c.rows[i].sentence_id+'</td><td>'+surf+'</td><td>'+cat+'</td><td>'+iob+'</td></tr>';
 	}
 	html += '</table>';
 	return html;
