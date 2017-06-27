@@ -43,6 +43,14 @@
     border-collapse: collapse;
 }
 
+.tooltip .good {
+    color:green;
+}
+
+.tooltip .bad {
+    color:red;
+}
+
 .tooltip {
 border-collapse: collapse;
 }
